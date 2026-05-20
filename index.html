@@ -349,14 +349,8 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:'Segoe U
         <h3>🤖 Claude IA</h3>
 
         <div class="sg">
-          <label>Chave da API Anthropic</label>
-          <div class="desc">
-            <a href="https://console.anthropic.com" target="_blank" style="color:var(--pri);">console.anthropic.com</a>
-            → API Keys → Create Key
-          </div>
-          <div class="ak-row">
-            <input type="password" id="ak" placeholder="sk-ant-…">
-            <button class="btn btn-outline" style="padding:11px 13px;" onclick="toggleAk()">👁</button>
+          <div class="alert alert-info" style="margin:0;">
+            🔒 Chave de API configurada com segurança no servidor. Não é necessário inserir nada aqui.
           </div>
         </div>
 
@@ -608,24 +602,18 @@ function hideTypePanel(){ document.getElementById('type-panel').style.display='n
 function selType(btn){ document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); analysisType=btn.dataset.t; }
 
 /* ══════════════ CLAUDE API ══════════════ */
+const PROXY_URL = 'https://claude-proxy.rp-pinotti.workers.dev/';
+
 async function doAnalyze(txOv, sessId){
-  // Limpa a chave de API (remove espaços, quebras de linha e caracteres invisíveis)
-  const apiKey = (DB.settings.apiKey||'').replace(/[\s​﻿]/g,'');
-  if(!apiKey){ toast('Configure a API Key em Configurações.','e'); nav('cfg'); return; }
   const tx=(txOv||finalTx).trim();
   if(!tx){ toast('Sem transcrição.','e'); return; }
   hideTypePanel();
   const btn = sessId ? document.getElementById('dr-analyze') : document.getElementById('btn-analyze');
   if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin"></span>'; }
   try{
-    const res = await fetch('https://api.anthropic.com/v1/messages',{
+    const res = await fetch(PROXY_URL, {
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-allow-browser':'true'
-      },
+      headers:{ 'Content-Type':'application/json' },
       body:JSON.stringify({
         model: DB.settings.model||'claude-opus-4-5',
         max_tokens:3000,
@@ -647,9 +635,8 @@ async function doAnalyze(txOv, sessId){
     }
     toast('Análise concluída!','s');
   } catch(err){
-    // Mostra o erro real para facilitar diagnóstico
     const msg = err.message.includes('Failed to fetch')||err.message.includes('Load failed')
-      ? 'Falha de conexão. Verifique sua internet e a chave de API.'
+      ? 'Falha de conexão. Verifique sua internet.'
       : 'Erro: '+err.message;
     toast(msg,'e');
     console.error('Erro API:', err);
@@ -861,25 +848,23 @@ function saveCfg(){
 function toggleAk(){ const i=document.getElementById('ak'); i.type=i.type==='password'?'text':'password'; }
 
 async function testApi(){
-  const apiKey=(document.getElementById('ak').value||'').replace(/[\s​﻿]/g,'');
   const res=document.getElementById('test-result');
-  if(!apiKey){ res.style.display='block'; res.innerHTML='<div class="alert alert-warn">⚠️ Digite a chave antes de testar.</div>'; return; }
   res.style.display='block';
   res.innerHTML='<div class="alert alert-info">🔌 Testando conexão…</div>';
   try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{
+    const r=await fetch(PROXY_URL,{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-allow-browser':'true'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:document.getElementById('model').value||'claude-opus-4-5',max_tokens:10,messages:[{role:'user',content:'Olá'}]})
     });
     if(r.ok){
-      res.innerHTML='<div class="alert alert-info" style="background:#f0fff4;border-color:#9ae6b4;color:#276749;">✅ Conexão funcionando! Chave válida.</div>';
+      res.innerHTML='<div class="alert alert-info" style="background:#f0fff4;border-color:#9ae6b4;color:#276749;">✅ Conexão funcionando!</div>';
     } else {
       const e=await r.json().catch(()=>({}));
       res.innerHTML=`<div class="alert alert-warn">❌ Erro: ${e.error?.message||'HTTP '+r.status}</div>`;
     }
   } catch(err){
-    res.innerHTML=`<div class="alert alert-warn">❌ Falha de conexão: ${err.message}<br><small>Verifique sua internet ou tente outro navegador.</small></div>`;
+    res.innerHTML=`<div class="alert alert-warn">❌ Falha: ${err.message}</div>`;
   }
 }
 
@@ -902,9 +887,7 @@ function clearAll(){
 
 /* ══════════════ UTILS ══════════════ */
 function updateDot(){
-  document.getElementById('api-dot').innerHTML=DB.settings.apiKey
-    ?'<span style="color:#68d391;">● IA ativa</span>'
-    :'<span style="color:#f6ad55;">● Sem API key</span>';
+  document.getElementById('api-dot').innerHTML='<span style="color:#68d391;">● IA ativa</span>';
 }
 function toast(msg,type='i'){
   const el=document.getElementById('toast');
