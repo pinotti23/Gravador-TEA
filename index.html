@@ -392,7 +392,11 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:'Segoe U
             placeholder="Ex: Pesquisa sobre práticas educativas em crianças com TEA, pais de crianças de 3 a 12 anos…"></textarea>
         </div>
 
-        <button class="btn btn-success btn-full" onclick="saveCfg()">💾 Salvar Configurações</button>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button class="btn btn-success" style="flex:1;" onclick="saveCfg()">💾 Salvar</button>
+          <button class="btn btn-outline" style="flex:1;" onclick="testApi()">🔌 Testar conexão</button>
+        </div>
+        <div id="test-result" style="margin-top:10px;display:none;"></div>
       </div>
 
       <div class="settings-card">
@@ -605,7 +609,9 @@ function selType(btn){ document.querySelectorAll('.type-btn').forEach(b=>b.class
 
 /* ══════════════ CLAUDE API ══════════════ */
 async function doAnalyze(txOv, sessId){
-  if(!DB.settings.apiKey){ toast('Configure a API Key em Configurações.','e'); nav('cfg'); return; }
+  // Limpa a chave de API (remove espaços, quebras de linha e caracteres invisíveis)
+  const apiKey = (DB.settings.apiKey||'').replace(/[\s​﻿]/g,'');
+  if(!apiKey){ toast('Configure a API Key em Configurações.','e'); nav('cfg'); return; }
   const tx=(txOv||finalTx).trim();
   if(!tx){ toast('Sem transcrição.','e'); return; }
   hideTypePanel();
@@ -614,10 +620,22 @@ async function doAnalyze(txOv, sessId){
   try{
     const res = await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':DB.settings.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-allow-browser':'true'},
-      body:JSON.stringify({model:DB.settings.model||'claude-opus-4-5',max_tokens:2048,messages:[{role:'user',content:buildPrompt(tx)}]})
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-allow-browser':'true'
+      },
+      body:JSON.stringify({
+        model: DB.settings.model||'claude-opus-4-5',
+        max_tokens:3000,
+        messages:[{role:'user',content:buildPrompt(tx)}]
+      })
     });
-    if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error?.message||'Erro '+res.status); }
+    if(!res.ok){
+      const e=await res.json().catch(()=>({}));
+      throw new Error(e.error?.message||'Erro HTTP '+res.status);
+    }
     const data=await res.json();
     const text=data.content[0].text;
     if(sessId){
@@ -628,20 +646,80 @@ async function doAnalyze(txOv, sessId){
       currentAnalysis=text; showResult(text);
     }
     toast('Análise concluída!','s');
-  } catch(err){ toast('Erro: '+err.message,'e'); }
+  } catch(err){
+    // Mostra o erro real para facilitar diagnóstico
+    const msg = err.message.includes('Failed to fetch')||err.message.includes('Load failed')
+      ? 'Falha de conexão. Verifique sua internet e a chave de API.'
+      : 'Erro: '+err.message;
+    toast(msg,'e');
+    console.error('Erro API:', err);
+  }
   finally{ if(btn){ btn.disabled=false; btn.innerHTML='✨ Analisar'; } }
 }
 
 function buildPrompt(tx){
   const ctx=DB.settings.context?.trim();
-  const ctxB=ctx?`\n\n**Contexto:** ${ctx}`:'';
+  const ctxB=ctx?`\n\n**Contexto da pesquisa:** ${ctx}`:'';
   const types={
-    full:`Análise completa em Markdown:\n\n## 📋 Resumo\nResumo executivo em 2-3 parágrafos.\n\n## 🎯 Pontos Principais\nBullet points dos pontos mais importantes.\n\n## 🏷 Temas Emergentes\nPrincipais temas identificados.\n\n## 💬 Citações Relevantes\n3-5 citações diretas significativas.\n\n## 🔍 Análise Qualitativa\nAnálise aprofundada sobre práticas educativas e TEA.\n\n## ✅ Pontos de Atenção\nAspectos para aprofundar em sessões futuras.`,
-    summary:`Resumo claro e objetivo em 3-5 parágrafos.`,
-    themes:`Identifique temas e categorias. Para cada: nome, descrição e exemplo de fala.`,
-    research:`## 🧩 Dados Mencionados\n## 📚 Práticas Educativas\n## 🧠 Percepções sobre TEA\n## 🤝 Suporte e Recursos\n## 🙋 Necessidades\n## 💬 Citações-Chave`
+    full:`Analise esta transcrição de entrevista de pesquisa. Siga os passos em ordem:
+
+**PASSO 1 — Separação de falas**
+Identifique e separe as falas do pesquisador (perguntas) das falas do participante (respostas). Use o contexto, padrão de perguntas e fluxo da conversa para distingui-las. Apresente no formato:
+
+## 🗣 Diálogo Reconstruído
+❓ **Pesquisador:** [pergunta]
+💬 **Participante:** [resposta]
+(repita para cada troca)
+
+**PASSO 2 — Análise das respostas**
+Com base apenas nas falas do participante:
+
+## 📋 Resumo
+Resumo em 2-3 parágrafos do que o participante relatou.
+
+## 🎯 Pontos Principais
+Bullet points dos pontos mais importantes relatados pelo participante.
+
+## 🏷 Temas Emergentes
+Principais temas identificados nas respostas.
+
+## 💬 Citações Relevantes
+3-5 trechos mais significativos das falas do participante (entre aspas).
+
+## 🔍 Análise Qualitativa
+Análise aprofundada das respostas considerando práticas educativas parentais e TEA.
+
+## ✅ Pontos de Atenção
+Aspectos que merecem aprofundamento em próximas entrevistas.`,
+
+    summary:`Analise esta transcrição de entrevista. Primeiro, identifique quais trechos são do pesquisador (perguntas) e quais são do participante (respostas). Em seguida, faça um resumo em 3-5 parágrafos focando no que o participante relatou.`,
+
+    themes:`Analise esta transcrição de entrevista. Identifique as perguntas do pesquisador e as respostas do participante. Depois, liste os principais temas e categorias presentes nas respostas do participante. Para cada tema: nome, descrição e citação direta do participante.`,
+
+    research:`Analise esta transcrição de entrevista de pesquisa sobre TEA. Separe pesquisador de participante e depois organize as respostas do participante nas seguintes categorias:
+
+## 🗣 Diálogo Reconstruído
+❓ **Pesquisador:** [pergunta]
+💬 **Participante:** [resposta]
+
+## 🧩 Dados Sociodemográficos Mencionados
+## 📚 Práticas Educativas Identificadas
+(cada prática com descrição e citação direta)
+## 🧠 Percepções sobre o TEA
+## 🤝 Suporte e Recursos Disponíveis
+## 🙋 Necessidades e Demandas
+## 💬 Citações-Chave`
   };
-  return `Você é assistente de pesquisa científica especializado em análise qualitativa.${ctxB}\n\nTranscrição de entrevista sobre práticas educativas parentais em crianças com TEA:\n\n---\n${tx}\n---\n\n${types[analysisType]||types.full}`;
+
+  return `Você é um assistente de pesquisa científica especializado em análise qualitativa de entrevistas.${ctxB}
+
+A transcrição abaixo foi gerada automaticamente por reconhecimento de voz durante uma entrevista. Pode não ter pontuação perfeita, mas o conteúdo está correto.
+
+---TRANSCRIÇÃO---
+${tx}
+---FIM---
+
+${types[analysisType]||types.full}`;
 }
 
 function showResult(text){
@@ -781,6 +859,29 @@ function saveCfg(){
   toast('Configurações salvas!','s');
 }
 function toggleAk(){ const i=document.getElementById('ak'); i.type=i.type==='password'?'text':'password'; }
+
+async function testApi(){
+  const apiKey=(document.getElementById('ak').value||'').replace(/[\s​﻿]/g,'');
+  const res=document.getElementById('test-result');
+  if(!apiKey){ res.style.display='block'; res.innerHTML='<div class="alert alert-warn">⚠️ Digite a chave antes de testar.</div>'; return; }
+  res.style.display='block';
+  res.innerHTML='<div class="alert alert-info">🔌 Testando conexão…</div>';
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-allow-browser':'true'},
+      body:JSON.stringify({model:document.getElementById('model').value||'claude-opus-4-5',max_tokens:10,messages:[{role:'user',content:'Olá'}]})
+    });
+    if(r.ok){
+      res.innerHTML='<div class="alert alert-info" style="background:#f0fff4;border-color:#9ae6b4;color:#276749;">✅ Conexão funcionando! Chave válida.</div>';
+    } else {
+      const e=await r.json().catch(()=>({}));
+      res.innerHTML=`<div class="alert alert-warn">❌ Erro: ${e.error?.message||'HTTP '+r.status}</div>`;
+    }
+  } catch(err){
+    res.innerHTML=`<div class="alert alert-warn">❌ Falha de conexão: ${err.message}<br><small>Verifique sua internet ou tente outro navegador.</small></div>`;
+  }
+}
 
 /* ══════════════ BACKUP ══════════════ */
 function exportBackup(){
