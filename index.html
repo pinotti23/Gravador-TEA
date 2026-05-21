@@ -254,6 +254,43 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:'Segoe U
 
 /* No support */
 .no-sup{background:#fff5f5;border:2px dashed var(--dan);border-radius:12px;padding:16px;text-align:center;margin-bottom:14px;font-size:14px;}
+
+/* Upload card */
+.upload-card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.07);border:2px dashed var(--brd);text-align:center;}
+.upload-title{font-size:15px;font-weight:700;margin-bottom:4px;}
+.upload-desc{font-size:13px;color:var(--txt2);margin-bottom:12px;}
+.upload-btn{display:block;padding:12px;background:var(--bg);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;color:var(--pri);border:2px solid var(--pri);}
+.upload-btn:active{background:#ebf8ff;}
+
+/* Wake lock warning banner */
+#wake-banner{
+  display:none;
+  background:#744210;
+  color:#fefcbf;
+  padding:10px 16px;
+  font-size:13px;
+  font-weight:600;
+  text-align:center;
+  line-height:1.4;
+  flex-shrink:0;
+}
+#wake-banner.show{display:block;}
+
+/* Recording active overlay indicator */
+.rec-live{
+  display:none;
+  background:#e53e3e;
+  color:#fff;
+  font-size:12px;
+  font-weight:700;
+  text-align:center;
+  padding:6px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  flex-shrink:0;
+}
+.rec-live.show{display:block;animation:liveblink 2s infinite;}
+@keyframes liveblink{0%,100%{opacity:1;}50%{opacity:.6;}}
 </style>
 </head>
 <body>
@@ -263,6 +300,15 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:'Segoe U
   <div id="topbar">
     <h1>🎙️ Gravador IA</h1>
     <span id="api-dot"></span>
+  </div>
+
+  <!-- ── Live indicator ── -->
+  <div class="rec-live" id="rec-live">⏺ GRAVANDO — MANTENHA A TELA ACESA</div>
+
+  <!-- ── Wake lock warning ── -->
+  <div id="wake-banner">
+    ⚠️ Seu dispositivo não suporta bloqueio de tela automático.<br>
+    Mantenha a tela acesa manualmente durante a gravação.
   </div>
 
   <!-- ── Content ── -->
@@ -277,6 +323,20 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:'Segoe U
 
       <input class="sess-name-inp" type="text" id="sess-name"
         placeholder="Nome da sessão — ex: Entrevista P01">
+
+      <!-- Upload de áudio -->
+      <div class="upload-card" id="upload-card">
+        <div class="upload-title">📎 Enviar áudio gravado</div>
+        <div class="upload-desc">Gravou pelo app nativo do celular? Envie aqui para transcrever automaticamente.</div>
+        <label class="upload-btn" for="audio-inp">
+          🎵 Selecionar arquivo de áudio
+          <input type="file" id="audio-inp" accept=".m4a,.mp3,.wav,.aac,.mp4,.ogg,.webm" onchange="handleAudio(event)" style="display:none;">
+        </label>
+        <div id="audio-info" style="display:none;margin-top:10px;font-size:13px;color:var(--txt2);text-align:center;"></div>
+        <button class="btn btn-primary btn-full" id="btn-tx" style="display:none;margin-top:10px;" onclick="transcribeAudio()">
+          📝 Transcrever áudio
+        </button>
+      </div>
 
       <!-- Timer + botão -->
       <div class="rec-center">
@@ -536,10 +596,12 @@ function startRec(){
   document.getElementById('btn-rec').classList.add('pulsing');
   document.getElementById('btn-stop').disabled=false;
   document.getElementById('rec-hint').innerHTML='<span class="rec-dot"></span>Gravando…';
+  document.getElementById('rec-live').classList.add('show');
   document.getElementById('act-row').style.display='none';
   document.getElementById('act-row2').style.display='none';
   document.getElementById('type-panel').style.display='none';
   document.getElementById('result-area').style.display='none';
+  requestWakeLock();
   timerInt = setInterval(()=>{ elapsed++; document.getElementById('timer').textContent=fmt(elapsed); },1000);
 }
 function pauseRec(){
@@ -564,6 +626,8 @@ function stopRecord(){
   document.getElementById('btn-rec').classList.remove('pulsing');
   document.getElementById('btn-stop').disabled=true;
   document.getElementById('rec-hint').textContent='Toque para gravar';
+  document.getElementById('rec-live').classList.remove('show');
+  releaseWakeLock();
   if(interimTx){ finalTx+=interimTx+' '; interimTx=''; refreshTx(); }
   if(finalTx.trim()){
     document.getElementById('act-row').style.display='grid';
@@ -895,6 +959,84 @@ function toast(msg,type='i'){
   clearTimeout(window._tt);
   window._tt=setTimeout(()=>el.className='',3000);
 }
+
+/* ══════════════ AUDIO UPLOAD & TRANSCRIÇÃO ══════════════ */
+let selectedAudio = null;
+
+function handleAudio(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  selectedAudio = file;
+  const mb = (file.size/1024/1024).toFixed(1);
+  document.getElementById('audio-info').style.display='block';
+  document.getElementById('audio-info').innerHTML=`📄 <strong>${file.name}</strong> — ${mb} MB`;
+  document.getElementById('btn-tx').style.display='block';
+}
+
+async function transcribeAudio(){
+  if(!selectedAudio){ toast('Nenhum arquivo selecionado.','e'); return; }
+  const btn = document.getElementById('btn-tx');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spin"></span> Transcrevendo… pode demorar alguns segundos';
+  try{
+    const form = new FormData();
+    form.append('audio', selectedAudio);
+    const res = await fetch(PROXY_URL+'transcribe',{ method:'POST', body:form });
+    if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error||'Erro '+res.status); }
+    const data = await res.json();
+    if(!data.text) throw new Error('Transcrição vazia. Verifique o arquivo de áudio.');
+    finalTx = data.text;
+    refreshTx();
+    document.getElementById('act-row').style.display='grid';
+    document.getElementById('act-row2').style.display='block';
+    document.getElementById('upload-card').style.borderColor='var(--suc)';
+    toast('Transcrição concluída!','s');
+  } catch(err){
+    toast('Erro: '+err.message,'e');
+  } finally{
+    btn.disabled=false;
+    btn.innerHTML='📝 Transcrever áudio';
+  }
+}
+
+/* ══════════════ WAKE LOCK ══════════════ */
+let wakeLock = null;
+
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', ()=>{
+        // Se a tela apagar mesmo assim (ex: botão físico), avisa e tenta recuperar
+        if(isRec){
+          document.getElementById('wake-banner').classList.add('show');
+          setTimeout(()=>requestWakeLock(), 500);
+        }
+      });
+    } else {
+      // Dispositivo não suporta Wake Lock — mostra aviso
+      document.getElementById('wake-banner').classList.add('show');
+    }
+  } catch(err){
+    document.getElementById('wake-banner').classList.add('show');
+    console.warn('Wake Lock não disponível:', err);
+  }
+}
+
+function releaseWakeLock(){
+  if(wakeLock){ wakeLock.release(); wakeLock=null; }
+  document.getElementById('wake-banner').classList.remove('show');
+}
+
+// Recupera wake lock quando o app volta para o fundo e retorna
+document.addEventListener('visibilitychange', async ()=>{
+  if(document.visibilityState==='visible' && isRec){
+    await requestWakeLock();
+    // Reinicia o reconhecimento se parou
+    if(!isPaused){ try{ recog.stop(); }catch(e){} setTimeout(()=>{ try{ recog.start(); }catch(e){} }, 300); }
+    toast('Gravação retomada.','i');
+  }
+});
 
 /* ══════════════ INIT ══════════════ */
 initRecog();
