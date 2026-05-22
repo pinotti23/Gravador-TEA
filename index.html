@@ -1014,7 +1014,10 @@ function transcribeAudio(){
   btn.innerHTML='<span class="spin"></span> Processando…';
 
   const form = new FormData();
-  form.append('audio', selectedAudio);
+  form.append('file', selectedAudio, selectedAudio.name || 'audio.m4a');
+  form.append('model', 'whisper-large-v3-turbo');
+  form.append('language', 'pt');
+  form.append('response_format', 'json');
 
   // Chama o Groq diretamente do navegador (sem passar pelo Worker)
   const groqKey = (DB.settings.groqKey||'').trim();
