@@ -336,6 +336,18 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:'Segoe U
         <button class="btn btn-primary btn-full" id="btn-tx" style="display:none;margin-top:10px;" onclick="transcribeAudio()">
           📝 Transcrever áudio
         </button>
+
+        <!-- Barra de progresso -->
+        <div id="tx-progress" style="display:none;margin-top:14px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:6px;">
+            <span id="tx-stage">Preparando…</span>
+            <span id="tx-pct">0%</span>
+          </div>
+          <div style="background:#e2e8f0;border-radius:8px;height:10px;overflow:hidden;">
+            <div id="tx-bar" style="height:100%;border-radius:8px;background:var(--pri);transition:width .3s;width:0%;"></div>
+          </div>
+          <div id="tx-substage" style="font-size:12px;color:var(--txt2);margin-top:5px;text-align:center;"></div>
+        </div>
       </div>
 
       <!-- Timer + botão -->
@@ -973,30 +985,79 @@ function handleAudio(ev){
   document.getElementById('btn-tx').style.display='block';
 }
 
-async function transcribeAudio(){
+function setProgress(stage, pct, sub=''){
+  document.getElementById('tx-progress').style.display='block';
+  document.getElementById('tx-stage').textContent=stage;
+  document.getElementById('tx-pct').textContent=pct+'%';
+  document.getElementById('tx-bar').style.width=pct+'%';
+  document.getElementById('tx-bar').style.background = pct===100 ? 'var(--suc)' : 'var(--pri)';
+  document.getElementById('tx-substage').textContent=sub;
+}
+
+function hideProgress(){
+  document.getElementById('tx-progress').style.display='none';
+}
+
+function transcribeAudio(){
   if(!selectedAudio){ toast('Nenhum arquivo selecionado.','e'); return; }
   const btn = document.getElementById('btn-tx');
   btn.disabled=true;
-  btn.innerHTML='<span class="spin"></span> Transcrevendo… pode demorar alguns segundos';
-  try{
-    const form = new FormData();
-    form.append('audio', selectedAudio);
-    const res = await fetch(PROXY_URL+'transcribe',{ method:'POST', body:form });
-    if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error||'Erro '+res.status); }
-    const data = await res.json();
-    if(!data.text) throw new Error('Transcrição vazia. Verifique o arquivo de áudio.');
-    finalTx = data.text;
-    refreshTx();
-    document.getElementById('act-row').style.display='grid';
-    document.getElementById('act-row2').style.display='block';
-    document.getElementById('upload-card').style.borderColor='var(--suc)';
-    toast('Transcrição concluída!','s');
-  } catch(err){
-    toast('Erro: '+err.message,'e');
-  } finally{
+  btn.innerHTML='<span class="spin"></span> Processando…';
+
+  const form = new FormData();
+  form.append('audio', selectedAudio);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', PROXY_URL+'transcribe');
+
+  // Progresso do upload
+  xhr.upload.onprogress = ev => {
+    if(ev.lengthComputable){
+      const pct = Math.round((ev.loaded/ev.total)*60); // upload = 0→60%
+      const mb = (ev.loaded/1024/1024).toFixed(1);
+      const total = (ev.total/1024/1024).toFixed(1);
+      setProgress('📤 Enviando áudio…', pct, mb+' MB de '+total+' MB enviados');
+    }
+  };
+
+  xhr.upload.onload = () => {
+    setProgress('🔍 Transcrevendo…', 70, 'Groq Whisper processando o áudio…');
+  };
+
+  xhr.onload = () => {
+    try{
+      const data = JSON.parse(xhr.responseText);
+      if(xhr.status !== 200 || data.error){
+        throw new Error(data.error || 'Erro '+xhr.status);
+      }
+      if(!data.text) throw new Error('Transcrição vazia. Verifique o arquivo.');
+
+      setProgress('✅ Concluído!', 100, 'Transcrição pronta — revise e analise');
+      finalTx = data.text;
+      refreshTx();
+      document.getElementById('act-row').style.display='grid';
+      document.getElementById('act-row2').style.display='block';
+      document.getElementById('upload-card').style.borderColor='var(--suc)';
+      toast('Transcrição concluída!','s');
+
+    } catch(err){
+      hideProgress();
+      toast('Erro: '+err.message,'e');
+    } finally{
+      btn.disabled=false;
+      btn.innerHTML='📝 Transcrever áudio';
+    }
+  };
+
+  xhr.onerror = () => {
+    hideProgress();
+    toast('Falha de conexão. Verifique sua internet.','e');
     btn.disabled=false;
     btn.innerHTML='📝 Transcrever áudio';
-  }
+  };
+
+  setProgress('📤 Enviando áudio…', 5, 'Iniciando envio…');
+  xhr.send(form);
 }
 
 /* ══════════════ WAKE LOCK ══════════════ */
