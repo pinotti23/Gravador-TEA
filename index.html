@@ -422,7 +422,16 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:'Segoe U
 
         <div class="sg">
           <div class="alert alert-info" style="margin:0;">
-            🔒 Chave de API configurada com segurança no servidor. Não é necessário inserir nada aqui.
+            🔒 Chave do Claude configurada com segurança no servidor. Não é necessário inserir nada aqui.
+          </div>
+        </div>
+
+        <div class="sg">
+          <label>Chave da API Groq (transcrição de áudio)</label>
+          <div class="desc">Gratuita em <a href="https://console.groq.com" target="_blank" style="color:var(--pri);">console.groq.com</a> → API Keys</div>
+          <div class="ak-row">
+            <input type="password" id="groq-key" placeholder="gsk_…">
+            <button class="btn btn-outline" style="padding:11px 13px;" onclick="toggleGroqVis()">👁</button>
           </div>
         </div>
 
@@ -905,6 +914,7 @@ function exportTxt(s){
 /* ══════════════ SETTINGS ══════════════ */
 function loadCfgForm(){
   document.getElementById('ak').value=DB.settings.apiKey||'';
+  document.getElementById('groq-key').value=DB.settings.groqKey||'';
   document.getElementById('model').value=DB.settings.model||'claude-opus-4-5';
   document.getElementById('lang').value=DB.settings.language||'pt-BR';
   document.getElementById('auto-an').checked=!!DB.settings.autoAnalyze;
@@ -912,6 +922,7 @@ function loadCfgForm(){
 }
 function saveCfg(){
   DB.settings.apiKey=document.getElementById('ak').value.trim();
+  DB.settings.groqKey=document.getElementById('groq-key').value.trim();
   DB.settings.model=document.getElementById('model').value;
   DB.settings.language=document.getElementById('lang').value;
   DB.settings.autoAnalyze=document.getElementById('auto-an').checked;
@@ -922,6 +933,7 @@ function saveCfg(){
   toast('Configurações salvas!','s');
 }
 function toggleAk(){ const i=document.getElementById('ak'); i.type=i.type==='password'?'text':'password'; }
+function toggleGroqVis(){ const i=document.getElementById('groq-key'); i.type=i.type==='password'?'text':'password'; }
 
 async function testApi(){
   const res=document.getElementById('test-result');
@@ -1007,13 +1019,22 @@ function transcribeAudio(){
   const form = new FormData();
   form.append('audio', selectedAudio);
 
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', PROXY_URL+'transcribe');
+  // Chama o Groq diretamente do navegador (sem passar pelo Worker)
+  const groqKey = (DB.settings.groqKey||'').trim();
+  if(!groqKey){
+    hideProgress();
+    toast('Configure a chave Groq nas Configurações.','e');
+    btn.disabled=false; btn.innerHTML='📝 Transcrever áudio';
+    return;
+  }
 
-  // Progresso do upload
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', 'https://api.groq.com/openai/v1/audio/transcriptions');
+  xhr.setRequestHeader('Authorization', 'Bearer ' + groqKey);
+
   xhr.upload.onprogress = ev => {
     if(ev.lengthComputable){
-      const pct = Math.round((ev.loaded/ev.total)*60); // upload = 0→60%
+      const pct = Math.round((ev.loaded/ev.total)*60);
       const mb = (ev.loaded/1024/1024).toFixed(1);
       const total = (ev.total/1024/1024).toFixed(1);
       setProgress('📤 Enviando áudio…', pct, mb+' MB de '+total+' MB enviados');
@@ -1028,10 +1049,9 @@ function transcribeAudio(){
     try{
       const data = JSON.parse(xhr.responseText);
       if(xhr.status !== 200 || data.error){
-        throw new Error(data.error || 'Erro '+xhr.status);
+        throw new Error(data.error?.message || data.error || 'Erro '+xhr.status);
       }
       if(!data.text) throw new Error('Transcrição vazia. Verifique o arquivo.');
-
       setProgress('✅ Concluído!', 100, 'Transcrição pronta — revise e analise');
       finalTx = data.text;
       refreshTx();
@@ -1039,7 +1059,6 @@ function transcribeAudio(){
       document.getElementById('act-row2').style.display='block';
       document.getElementById('upload-card').style.borderColor='var(--suc)';
       toast('Transcrição concluída!','s');
-
     } catch(err){
       hideProgress();
       toast('Erro: '+err.message,'e');
@@ -1052,8 +1071,7 @@ function transcribeAudio(){
   xhr.onerror = () => {
     hideProgress();
     toast('Falha de conexão. Verifique sua internet.','e');
-    btn.disabled=false;
-    btn.innerHTML='📝 Transcrever áudio';
+    btn.disabled=false; btn.innerHTML='📝 Transcrever áudio';
   };
 
   setProgress('📤 Enviando áudio…', 5, 'Iniciando envio…');
