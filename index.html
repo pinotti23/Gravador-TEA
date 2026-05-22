@@ -733,54 +733,80 @@ function buildPrompt(tx){
   const ctx=DB.settings.context?.trim();
   const ctxB=ctx?`\n\n**Contexto da pesquisa:** ${ctx}`:'';
   const types={
-    full:`Analise esta transcrição de entrevista de pesquisa. Siga os passos em ordem:
-
-**PASSO 1 — Separação de falas**
-Identifique e separe as falas do pesquisador (perguntas) das falas do participante (respostas). Use o contexto, padrão de perguntas e fluxo da conversa para distingui-las. Apresente no formato:
-
-## 🗣 Diálogo Reconstruído
-❓ **Pesquisador:** [pergunta]
-💬 **Participante:** [resposta]
-(repita para cada troca)
-
-**PASSO 2 — Análise das respostas**
-Com base apenas nas falas do participante:
+    full:`Analise esta transcrição de entrevista de pesquisa sobre práticas educativas parentais em crianças com TEA. Produza uma análise estruturada no seguinte formato:
 
 ## 📋 Resumo
-Resumo em 2-3 parágrafos do que o participante relatou.
+Escreva um parágrafo conciso resumindo os principais temas abordados na entrevista.
 
-## 🎯 Pontos Principais
-Bullet points dos pontos mais importantes relatados pelo participante.
+## 🎯 Pontos-Chave
+Organize os pontos mais importantes por TEMAS. Para cada tema, use o seguinte formato:
 
-## 🏷 Temas Emergentes
-Principais temas identificados nas respostas.
+**[Nome do Tema]**
+• [ponto relevante sobre o tema]
+• [outro ponto relevante]
 
-## 💬 Citações Relevantes
-3-5 trechos mais significativos das falas do participante (entre aspas).
+Identifique entre 4 e 7 temas principais com base no conteúdo das respostas do participante.
 
-## 🔍 Análise Qualitativa
-Análise aprofundada das respostas considerando práticas educativas parentais e TEA.
+## ✅ Itens de Ação
+Liste tarefas ou encaminhamentos identificados na entrevista, no formato:
+• [ ] [Responsável] → [ação]
 
-## ✅ Pontos de Atenção
-Aspectos que merecem aprofundamento em próximas entrevistas.`,
+## 📖 Capítulos Temáticos
+Divida a entrevista em segmentos temáticos. Para cada capítulo:
+**[Título do capítulo]**
+[Descrição de 2-3 linhas do que foi abordado neste segmento]
 
-    summary:`Analise esta transcrição de entrevista. Primeiro, identifique quais trechos são do pesquisador (perguntas) e quais são do participante (respostas). Em seguida, faça um resumo em 3-5 parágrafos focando no que o participante relatou.`,
+## 🗣 Transcrição com Falantes Identificados
+Reescreva a transcrição identificando os falantes. Use o contexto para distinguir quem é o pesquisador e quem é o participante:
+**Pesquisador:** [fala]
+**Participante:** [fala]`,
 
-    themes:`Analise esta transcrição de entrevista. Identifique as perguntas do pesquisador e as respostas do participante. Depois, liste os principais temas e categorias presentes nas respostas do participante. Para cada tema: nome, descrição e citação direta do participante.`,
+    summary:`Analise esta transcrição de entrevista de pesquisa sobre TEA. Identifique pesquisador e participante pelo contexto das falas. Produza:
 
-    research:`Analise esta transcrição de entrevista de pesquisa sobre TEA. Separe pesquisador de participante e depois organize as respostas do participante nas seguintes categorias:
+## 📋 Resumo
+Um parágrafo conciso com os principais temas da entrevista.
 
-## 🗣 Diálogo Reconstruído
-❓ **Pesquisador:** [pergunta]
-💬 **Participante:** [resposta]
+## 🎯 Pontos-Chave por Tema
+Organize os pontos mais importantes por temas (4-6 temas), com bullet points sob cada tema.`,
 
-## 🧩 Dados Sociodemográficos Mencionados
+    themes:`Analise esta transcrição de entrevista sobre TEA. Identifique pesquisador e participante. Produza:
+
+## 🏷 Temas e Categorias
+Para cada tema identificado nas respostas do participante:
+**[Nome do Tema]**
+Descrição: [o que o participante relatou sobre este tema]
+Citação: "[trecho direto da fala do participante]"`,
+
+    research:`Analise esta transcrição de entrevista de pesquisa sobre práticas educativas parentais em TEA. Produza uma análise completa para fins científicos:
+
+## 📋 Resumo
+Parágrafo conciso dos temas abordados.
+
+## 🎯 Pontos-Chave por Tema
+Organize por temas relevantes à pesquisa com bullet points.
+
+## 🧩 Dados Sociodemográficos
+Extraia informações objetivas mencionadas (idade, escolaridade, renda, estrutura familiar, diagnóstico, etc.)
+
 ## 📚 Práticas Educativas Identificadas
-(cada prática com descrição e citação direta)
+Para cada prática relatada pelo participante:
+**[Nome da prática]** — [descrição e citação direta]
+
 ## 🧠 Percepções sobre o TEA
-## 🤝 Suporte e Recursos Disponíveis
+Como o participante percebe o diagnóstico, os desafios e o desenvolvimento da criança.
+
+## 🤝 Rede de Suporte e Recursos
+O que o participante menciona como apoio disponível (família, escola, profissionais, benefícios).
+
 ## 🙋 Necessidades e Demandas
-## 💬 Citações-Chave`
+O que o participante indica precisar ou deseja receber.
+
+## ✅ Itens de Ação
+Encaminhamentos identificados: • [ ] [Responsável] → [ação]
+
+## 🗣 Transcrição com Falantes Identificados
+**Pesquisador:** [fala]
+**Participante:** [fala]`
   };
 
   return `Você é um assistente de pesquisa científica especializado em análise qualitativa de entrevistas.${ctxB}
