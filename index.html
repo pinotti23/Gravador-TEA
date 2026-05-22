@@ -913,7 +913,6 @@ function exportTxt(s){
 
 /* ══════════════ SETTINGS ══════════════ */
 function loadCfgForm(){
-  document.getElementById('ak').value=DB.settings.apiKey||'';
   document.getElementById('groq-key').value=DB.settings.groqKey||'';
   document.getElementById('model').value=DB.settings.model||'claude-opus-4-5';
   document.getElementById('lang').value=DB.settings.language||'pt-BR';
@@ -921,7 +920,6 @@ function loadCfgForm(){
   document.getElementById('ctx').value=DB.settings.context||'';
 }
 function saveCfg(){
-  DB.settings.apiKey=document.getElementById('ak').value.trim();
   DB.settings.groqKey=document.getElementById('groq-key').value.trim();
   DB.settings.model=document.getElementById('model').value;
   DB.settings.language=document.getElementById('lang').value;
@@ -932,7 +930,6 @@ function saveCfg(){
   initRecog(); updateDot();
   toast('Configurações salvas!','s');
 }
-function toggleAk(){ const i=document.getElementById('ak'); i.type=i.type==='password'?'text':'password'; }
 function toggleGroqVis(){ const i=document.getElementById('groq-key'); i.type=i.type==='password'?'text':'password'; }
 
 async function testApi(){
