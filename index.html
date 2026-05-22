@@ -701,7 +701,7 @@ async function doAnalyze(txOv, sessId){
       headers:{ 'Content-Type':'application/json' },
       body:JSON.stringify({
         model: DB.settings.model||'claude-opus-4-5',
-        max_tokens:3000,
+        max_tokens:8000,
         messages:[{role:'user',content:buildPrompt(tx)}]
       })
     });
